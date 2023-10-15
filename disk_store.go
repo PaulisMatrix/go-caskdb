@@ -146,20 +146,33 @@ func (d *DiskStore) Get(key string) string {
 func (d *DiskStore) Set(key string, value string) {
 	timestamp := uint32(time.Now().Unix())
 	totalSize, data := encodeKV(timestamp, key, value)
+
+	//writing to the file for every Set operation.
 	_, err := d.file.Write(data)
 	if err != nil {
 		fmt.Println("error while writing kv to disk", err)
 		os.Exit(1)
 	}
+	//its not guaranteed that file.Write data will actually get persisted to disk
+	//so forcefully call fsync after each write
+	err = d.file.Sync()
+	if err != nil {
+		fmt.Println("error while doing a fsync", err)
+		os.Exit(1)
+	}
+
 	d.KeyDir[key] = KeyEntry{timestamp: timestamp, writeOffSet: d.writePos, totalSize: uint32(totalSize)}
 	//update the writeOffset
 	d.writePos += uint32(totalSize)
 }
 
-func (d *DiskStore) Close() {
+func (d *DiskStore) Close() bool {
+	//making sure data is persisted to disk
+	d.file.Sync()
 	err := d.file.Close()
 	if err != nil {
 		fmt.Println("error in closing the file", err)
-		os.Exit(1)
+		return false
 	}
+	return true
 }
