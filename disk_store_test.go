@@ -1,4 +1,4 @@
-package caskdb
+package main
 
 import (
 	"os"

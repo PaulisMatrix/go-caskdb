@@ -1,9 +1,12 @@
-package caskdb
+package main
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"os"
+	"time"
 )
 
 // DiskStore is a Log-Structured Hash Table as described in the BitCask paper. We
@@ -47,6 +50,9 @@ import (
 //	   	store.Set("othello", "shakespeare")
 //	   	author := store.Get("othello")
 type DiskStore struct {
+	file     *os.File
+	writePos uint32
+	KeyDir   map[string]KeyEntry
 }
 
 func isFileExists(fileName string) bool {
@@ -58,17 +64,102 @@ func isFileExists(fileName string) bool {
 }
 
 func NewDiskStore(fileName string) (*DiskStore, error) {
-	panic("implement me")
+	ds := &DiskStore{KeyDir: make(map[string]KeyEntry)}
+
+	if isFileExists(fileName) {
+		ds.LoadKeys(fileName)
+	}
+
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		return &DiskStore{}, err
+	}
+	ds.file = file
+	return ds, nil
+}
+
+func (d *DiskStore) LoadKeys(fileName string) {
+	//load all keys from the file in in-mem hashtable
+	file, err := os.Open(fileName)
+	if err != nil {
+		fmt.Println("error in loading keys from the file db", err)
+		os.Exit(1)
+	}
+
+	for {
+		buffer := make([]byte, headerSize)
+		_, err := file.Read(buffer)
+		if err == io.EOF {
+			fmt.Println("done reading from the file. exiting...")
+			break
+		}
+		if err != nil {
+			fmt.Println("unkown error while reading the file", err)
+			break
+		}
+		timestamp, keySize, valueSize := decodeHeader(buffer)
+		key := make([]byte, keySize)
+		value := make([]byte, valueSize)
+
+		//Read automatically updates the offset to point to next byte to read from
+		_, err = file.Read(key)
+		if err != nil {
+			fmt.Println("error in reading keys", err)
+			break
+		}
+		_, err = file.Read(value)
+		if err != nil {
+			fmt.Println("error in reading values", err)
+			break
+		}
+		fmt.Printf("loaded key=%s and value=%s\n", string(key), string(value))
+		totalSize := headerSize + keySize + valueSize
+		d.KeyDir[string(key)] = KeyEntry{totalSize: totalSize, writeOffSet: d.writePos, timestamp: timestamp}
+		d.writePos += totalSize
+	}
+
 }
 
 func (d *DiskStore) Get(key string) string {
-	panic("implement me")
+	keyEntry, ok := d.KeyDir[key]
+	if !ok {
+		//key is not present, create first
+		return ""
+	}
+	writeOffset, totalSize := keyEntry.writeOffSet, keyEntry.totalSize
+	//before reading the kv we need to seek to the correct offset
+	_, err := d.file.Seek(int64(writeOffset), io.SeekStart)
+	if err != nil {
+		fmt.Println("error in seeking to the correct offset", err)
+		os.Exit(1)
+	}
+	buffer := make([]byte, totalSize)
+	_, err = d.file.Read(buffer)
+	if err != nil {
+		fmt.Println("error in reading the kv", err)
+		os.Exit(1)
+	}
+	_, _, value := decodeKV(buffer)
+	return value
 }
 
 func (d *DiskStore) Set(key string, value string) {
-	panic("implement me")
+	timestamp := uint32(time.Now().Unix())
+	totalSize, data := encodeKV(timestamp, key, value)
+	_, err := d.file.Write(data)
+	if err != nil {
+		fmt.Println("error while writing kv to disk", err)
+		os.Exit(1)
+	}
+	d.KeyDir[key] = KeyEntry{timestamp: timestamp, writeOffSet: d.writePos, totalSize: uint32(totalSize)}
+	//update the writeOffset
+	d.writePos += uint32(totalSize)
 }
 
-func (d *DiskStore) Close() bool {
-	panic("implement me")
+func (d *DiskStore) Close() {
+	err := d.file.Close()
+	if err != nil {
+		fmt.Println("error in closing the file", err)
+		os.Exit(1)
+	}
 }

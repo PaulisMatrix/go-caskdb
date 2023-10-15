@@ -1,4 +1,4 @@
-package caskdb
+package main
 
 type MemoryStore struct {
 	data map[string]string
