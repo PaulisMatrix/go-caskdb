@@ -114,7 +114,7 @@ func (d *DiskStore) LoadKeys(fileName string) {
 		}
 		fmt.Printf("loaded key=%s and value=%s\n", string(key), string(value))
 		totalSize := headerSize + keySize + valueSize
-		d.KeyDir[string(key)] = KeyEntry{totalSize: totalSize, writeOffSet: d.writePos, timestamp: timestamp}
+		d.KeyDir[string(key)] = NewKeyEntry(timestamp, d.writePos, totalSize)
 		d.writePos += totalSize
 	}
 
@@ -156,13 +156,13 @@ func (d *DiskStore) Set(key string, value string) {
 
 	//its not guaranteed that file.Write data will actually get persisted to disk
 	//so forcefully call fsync after each write
-	//err = d.file.Sync()
-	//if err != nil {
-	//	fmt.Println("error while doing a fsync", err)
-	//	os.Exit(1)
-	//}
+	err = d.file.Sync()
+	if err != nil {
+		fmt.Println("error while doing a fsync", err)
+		os.Exit(1)
+	}
 
-	d.KeyDir[key] = KeyEntry{timestamp: timestamp, writeOffSet: d.writePos, totalSize: uint32(totalSize)}
+	d.KeyDir[key] = NewKeyEntry(timestamp, d.writePos, uint32(totalSize))
 	//update the writeOffset
 	d.writePos += uint32(totalSize)
 }

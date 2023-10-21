@@ -1,15 +1,17 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+)
 
 func main() {
 	store, _ := NewDiskStore("books.db")
-	store.Set("othello", "shakespeare")
-	author1 := store.Get("othello")
-	fmt.Printf("value read %s\n", author1)
+	store.Set("othello", "shakespeare1")
 
-	store.Set("war and peace", "tolstoy")
-	author2 := store.Get("war and peace")
+	//keys are just appened to the log file
+	//but still we see the updated value since the in-memory hash table stores the updated offset for the same key.
+	store.Set("othello", "shakespeare2")
+	author2 := store.Get("othello")
 	fmt.Printf("value read %s\n", author2)
 
 	store.Close()

@@ -75,7 +75,7 @@ type KeyEntry struct {
 }
 
 func NewKeyEntry(timestamp uint32, position uint32, totalSize uint32) KeyEntry {
-	panic("implement me")
+	return KeyEntry{timestamp: timestamp, writeOffSet: position, totalSize: totalSize}
 }
 
 func encodeHeader(timestamp uint32, keySize uint32, valueSize uint32) []byte {
